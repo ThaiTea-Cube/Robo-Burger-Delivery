@@ -11,9 +11,17 @@
                                                           [Python Commander Node]  →  Nav2 / cmd_vel
 ```
 
-- ปุ่ม **ไปจุด A** → publish ข้อความ `"GO_A"`
-- ปุ่ม **กลับ Home** → publish ข้อความ `"GO_HOME"`
+รองรับหลายจุดหมาย — แตะการ์ดเพื่อสั่งจัดส่ง:
+
+| ปุ่ม | ข้อความที่ publish |
+|------|-------------------|
+| จุด A | `GO_A` |
+| จุด B | `GO_B` |
+| จุด C | `GO_C` |
+| กลับ Home | `GO_HOME` |
+
 - ส่งไปที่ topic `/web_command` ชนิด `std_msgs/String`
+- เพิ่ม/ลบจุดหมายได้ที่อาเรย์ `LOCATIONS` ด้านบนของ `<script>` ใน `index.html` (ไม่ต้องแก้ที่อื่น)
 
 > หน้าเว็บนี้รู้แค่การส่งคำสั่ง String — เรื่องพิกัด/การนำทางเป็นหน้าที่ของ Python Commander Node (ข้อ 2)
 
@@ -57,5 +65,5 @@ const COMMAND_TYPE  = 'std_msgs/String';  // ชนิดข้อความ
 
 ## ส่วนที่ยังต้องทำต่อ (นอกเหนือจากหน้าเว็บ)
 
-- [ ] **Python Commander Node** (ข้อ 2): subscribe `/web_command` → สั่ง Nav2 ไปพิกัด A / Home
+- [ ] **Python Commander Node** (ข้อ 2): subscribe `/web_command` → map `GO_A`/`GO_B`/`GO_C`/`GO_HOME` เป็นพิกัดแล้วสั่ง Nav2
 - [ ] **micro-ROS** (ข้อ 3): subscribe `/cmd_vel` → แปลงเป็น PWM ขับมอเตอร์

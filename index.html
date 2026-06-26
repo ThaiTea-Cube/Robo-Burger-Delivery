@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>หุ่นยนต์ส่งเบอร์เกอร์ — แผงควบคุม</title>
+
+  <!-- roslibjs : ไลบรารีคุยกับ ROS ผ่าน rosbridge websocket -->
+  <script src="https://cdn.jsdelivr.net/npm/roslib@1/build/roslib.min.js"></script>
+
+  <style>
+    :root {
+      --bg: #0f1220;
+      --card: #1a1f35;
+      --line: #2a3150;
+      --text: #e7eaf3;
+      --muted: #9aa3c0;
+      --green: #2ecc71;
+      --red: #e74c3c;
+      --accent-a: #ff8c42;   /* ปุ่มไปจุด A */
+      --accent-home: #4a90e2; /* ปุ่มกลับ Home */
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, "Segoe UI", "Helvetica Neue", "Sarabun", sans-serif;
+      background: radial-gradient(1200px 600px at 50% -10%, #182040, var(--bg));
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .wrap { width: 100%; max-width: 460px; }
+    h1 { font-size: 22px; margin: 0 0 4px; text-align: center; }
+    .subtitle { color: var(--muted); text-align: center; margin: 0 0 20px; font-size: 14px; }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+
+    /* แถบสถานะการเชื่อมต่อ */
+    .status {
+      display: flex; align-items: center; gap: 10px;
+      font-size: 14px; margin-bottom: 12px;
+    }
+    .dot {
+      width: 12px; height: 12px; border-radius: 50%;
+      background: var(--red);
+      box-shadow: 0 0 0 0 rgba(231,76,60,.6);
+      transition: background .2s;
+    }
+    .dot.on {
+      background: var(--green);
+      animation: pulse 1.6s infinite;
+    }
+    @keyframes pulse {
+      0%   { box-shadow: 0 0 0 0 rgba(46,204,113,.5); }
+      70%  { box-shadow: 0 0 0 10px rgba(46,204,113,0); }
+      100% { box-shadow: 0 0 0 0 rgba(46,204,113,0); }
+    }
+
+    label { display:block; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+    .row { display: flex; gap: 8px; }
+    input {
+      flex: 1; background: #0e1326; color: var(--text);
+      border: 1px solid var(--line); border-radius: 10px;
+      padding: 10px 12px; font-size: 14px; min-width: 0;
+    }
+    .btn {
+      border: none; border-radius: 10px; cursor: pointer;
+      color: #fff; font-weight: 700; padding: 10px 16px; font-size: 14px;
+      transition: transform .05s, opacity .2s;
+    }
+    .btn:active { transform: scale(.97); }
+    .btn-connect { background: #5b6bd6; }
+
+    /* ปุ่มสั่งงานใหญ่ */
+    .commands { display: grid; gap: 12px; }
+    .cmd {
+      border: none; border-radius: 16px; cursor: pointer;
+      color: #fff; font-size: 20px; font-weight: 800;
+      padding: 26px 16px; line-height: 1.3;
+      display: flex; flex-direction: column; align-items: center; gap: 6px;
+      transition: transform .06s, filter .2s, opacity .2s;
+    }
+    .cmd .big { font-size: 34px; }
+    .cmd:active { transform: scale(.98); }
+    .cmd:disabled { opacity: .4; cursor: not-allowed; filter: grayscale(.5); }
+    .cmd-a    { background: linear-gradient(135deg, #ff8c42, #ff5e3a); }
+    .cmd-home { background: linear-gradient(135deg, #4a90e2, #355cc4); }
+
+    /* กล่อง log */
+    .log {
+      background: #0b0f1e; border: 1px solid var(--line); border-radius: 10px;
+      padding: 10px; font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      font-size: 12px; color: var(--muted);
+      height: 130px; overflow-y: auto; white-space: pre-wrap; word-break: break-word;
+    }
+    .log .ok  { color: var(--green); }
+    .log .err { color: var(--red); }
+    .log .tx  { color: #ffd479; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>🍔 หุ่นยนต์ส่งเบอร์เกอร์</h1>
+    <p class="subtitle">แผงควบคุมผ่านเว็บ (ROS 2 · rosbridge)</p>
+
+    <!-- การเชื่อมต่อ -->
+    <div class="card">
+      <div class="status">
+        <span id="dot" class="dot"></span>
+        <span id="statusText">ยังไม่เชื่อมต่อ</span>
+      </div>
+      <label for="url">ที่อยู่ rosbridge (WebSocket)</label>
+      <div class="row">
+        <input id="url" value="ws://localhost:9090" autocapitalize="off" autocomplete="off" spellcheck="false" />
+        <button id="connectBtn" class="btn btn-connect">เชื่อมต่อ</button>
+      </div>
+    </div>
+
+    <!-- ปุ่มสั่งงาน -->
+    <div class="card commands">
+      <button id="goA" class="cmd cmd-a" disabled>
+        <span class="big">📍</span>
+        ไปจุด A
+      </button>
+      <button id="goHome" class="cmd cmd-home" disabled>
+        <span class="big">🏠</span>
+        กลับ Home
+      </button>
+    </div>
+
+    <!-- log -->
+    <div class="card">
+      <label>บันทึกการทำงาน</label>
+      <div id="log" class="log"></div>
+    </div>
+  </div>
+
+  <script>
+    // ---- การตั้งค่า ----
+    const COMMAND_TOPIC = '/web_command';      // topic ที่ฝั่ง Python Commander subscribe รออยู่
+    const COMMAND_TYPE  = 'std_msgs/String';   // ชนิดข้อความ
+
+    // ---- อ้างอิง element ----
+    const dot        = document.getElementById('dot');
+    const statusText = document.getElementById('statusText');
+    const urlInput   = document.getElementById('url');
+    const connectBtn = document.getElementById('connectBtn');
+    const goA        = document.getElementById('goA');
+    const goHome     = document.getElementById('goHome');
+    const logBox     = document.getElementById('log');
+
+    let ros = null;
+    let cmdTopic = null;
+    let connected = false;
+
+    // ---- ฟังก์ชันช่วย: เขียน log ----
+    function log(msg, cls = '') {
+      const t = new Date().toLocaleTimeString('th-TH');
+      const line = document.createElement('div');
+      if (cls) line.className = cls;
+      line.textContent = `[${t}] ${msg}`;
+      logBox.appendChild(line);
+      logBox.scrollTop = logBox.scrollHeight;
+    }
+
+    // ---- ปรับ UI ตามสถานะ ----
+    function setConnected(state) {
+      connected = state;
+      dot.classList.toggle('on', state);
+      statusText.textContent = state ? 'เชื่อมต่อแล้ว' : 'ยังไม่เชื่อมต่อ';
+      connectBtn.textContent = state ? 'ตัดการเชื่อมต่อ' : 'เชื่อมต่อ';
+      goA.disabled = !state;
+      goHome.disabled = !state;
+      urlInput.disabled = state;
+    }
+
+    // ---- เชื่อมต่อ rosbridge ----
+    function connect() {
+      const url = urlInput.value.trim();
+      if (!url) { log('กรุณากรอกที่อยู่ rosbridge', 'err'); return; }
+
+      log('กำลังเชื่อมต่อไปยัง ' + url + ' ...');
+      ros = new ROSLIB.Ros({ url });
+
+      ros.on('connection', () => {
+        log('เชื่อมต่อสำเร็จ ✓', 'ok');
+        setConnected(true);
+
+        // เตรียม topic สำหรับ publish คำสั่ง
+        cmdTopic = new ROSLIB.Topic({
+          ros: ros,
+          name: COMMAND_TOPIC,
+          messageType: COMMAND_TYPE
+        });
+      });
+
+      ros.on('error', (err) => {
+        log('เกิดข้อผิดพลาดในการเชื่อมต่อ', 'err');
+        console.error(err);
+      });
+
+      ros.on('close', () => {
+        log('การเชื่อมต่อถูกปิด', 'err');
+        setConnected(false);
+        cmdTopic = null;
+      });
+    }
+
+    function disconnect() {
+      if (ros) ros.close();   // event 'close' จะจัดการ UI ให้เอง
+    }
+
+    // ---- ส่งคำสั่งไปที่ /web_command ----
+    function sendCommand(data) {
+      if (!connected || !cmdTopic) {
+        log('ยังไม่ได้เชื่อมต่อ — ส่งคำสั่งไม่ได้', 'err');
+        return;
+      }
+      const msg = new ROSLIB.Message({ data });
+      cmdTopic.publish(msg);
+      log(`ส่งคำสั่ง → "${data}"  (${COMMAND_TOPIC})`, 'tx');
+    }
+
+    // ---- ผูก event ----
+    connectBtn.addEventListener('click', () => connected ? disconnect() : connect());
+    goA.addEventListener('click', () => sendCommand('GO_A'));
+    goHome.addEventListener('click', () => sendCommand('GO_HOME'));
+
+    // กด Enter ในช่อง url = เชื่อมต่อ
+    urlInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') connect(); });
+
+    log('พร้อมใช้งาน กดปุ่ม "เชื่อมต่อ" เพื่อเริ่ม');
+  </script>
+</body>
+</html>
